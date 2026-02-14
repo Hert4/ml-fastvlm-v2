@@ -9,7 +9,12 @@ from typing import Any
 import torch.nn as nn
 from timm.models import create_model
 
+# Import GlobalPool2D for use in MCi class
 from .mci import GlobalPool2D
+
+# Import fastvithd to register it with timm
+# This is needed for create_model("fastvithd") to work
+from .mci import fastvithd
 
 
 def load_model_config(

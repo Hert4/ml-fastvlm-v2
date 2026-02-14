@@ -19,6 +19,10 @@ class MobileCLIPVisionTower(nn.Module):
         self.tune_vision_tower = getattr(args, 'unfreeze_mm_vision_tower', False)
         self.input_image_size = int(vision_tower.split("_")[-1])
 
+        # Initialize cached device/dtype (will be set when model is loaded/moved)
+        self._cached_device = None
+        self._cached_dtype = None
+
         # Delay load is disabled for now
         if not delay_load:
             self.load_model()
@@ -91,30 +95,62 @@ class MobileCLIPVisionTower(nn.Module):
     def dummy_feature(self):
         return torch.zeros(1, self.hidden_size, device=self.device, dtype=self.dtype)
 
+    def _get_first_weight(self):
+        """Get the first weight tensor from the vision tower, bypassing parameter iteration issues."""
+        # Try to get a weight directly from a known layer
+        try:
+            # Access the inner model's first conv weight directly
+            if hasattr(self.vision_tower, 'model'):
+                model = self.vision_tower.model
+                # Try patch_embed first (convolutional stem)
+                if hasattr(model, 'patch_embed') and len(model.patch_embed) > 0:
+                    first_module = model.patch_embed[0]
+                    if hasattr(first_module, 'reparam_conv') and first_module.reparam_conv is not None:
+                        return first_module.reparam_conv.weight
+                    if hasattr(first_module, 'rbr_conv') and first_module.rbr_conv is not None:
+                        return first_module.rbr_conv[0].conv.weight
+                # Try conv_exp
+                if hasattr(model, 'conv_exp'):
+                    if hasattr(model.conv_exp, 'reparam_conv') and model.conv_exp.reparam_conv is not None:
+                        return model.conv_exp.reparam_conv.weight
+        except Exception as e:
+            print(f"[MobileCLIPVisionTower] Error getting weight directly: {e}")
+
+        # Fallback to parameter iteration
+        try:
+            return next(self.vision_tower.parameters())
+        except StopIteration:
+            return None
+
     @property
     def dtype(self):
-        params = list(self.vision_tower.parameters())
-        if not params:
-            print(f"[MobileCLIPVisionTower] WARNING: vision_tower has no parameters!")
-            print(f"[MobileCLIPVisionTower] vision_tower type: {type(self.vision_tower)}")
-            if hasattr(self.vision_tower, 'model'):
-                print(f"[MobileCLIPVisionTower] vision_tower.model type: {type(self.vision_tower.model)}")
-                model_params = list(self.vision_tower.model.parameters())
-                print(f"[MobileCLIPVisionTower] vision_tower.model has {len(model_params)} parameters")
-            # Fallback to float32
-            import torch
-            return torch.float32
-        return params[0].dtype
+        # Use cached dtype if available
+        if self._cached_dtype is not None:
+            return self._cached_dtype
+
+        weight = self._get_first_weight()
+        if weight is not None:
+            self._cached_dtype = weight.dtype
+            return weight.dtype
+
+        # Final fallback
+        import torch
+        return torch.float32
 
     @property
     def device(self):
-        params = list(self.vision_tower.parameters())
-        if not params:
-            print(f"[MobileCLIPVisionTower] WARNING: vision_tower has no parameters for device!")
-            # Fallback to cuda if available
-            import torch
-            return torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-        return params[0].device
+        # Use cached device if available
+        if self._cached_device is not None:
+            return self._cached_device
+
+        weight = self._get_first_weight()
+        if weight is not None:
+            self._cached_device = weight.device
+            return weight.device
+
+        # Final fallback
+        import torch
+        return torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
     @property
     def config(self):

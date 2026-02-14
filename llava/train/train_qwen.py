@@ -31,8 +31,16 @@ import tokenizers
 from llava.constants import IGNORE_INDEX, IMAGE_TOKEN_INDEX, DEFAULT_IMAGE_TOKEN, DEFAULT_IM_START_TOKEN, DEFAULT_IM_END_TOKEN
 from torch.utils.data import Dataset
 from llava.train.llava_trainer import LLaVATrainer
+from transformers import TrainerCallback
 
 from llava import conversation as conversation_lib
+
+
+class LossLoggingCallback(TrainerCallback):
+    """Callback to explicitly print loss during training."""
+    def on_log(self, args, state, control, logs=None, **kwargs):
+        if logs is not None and 'loss' in logs:
+            print(f"Step {state.global_step}: loss = {logs['loss']:.4f}", flush=True)
 from llava.model import *
 from llava.mm_utils import tokenizer_image_token, process_anyres_image
 
@@ -1364,6 +1372,7 @@ def train(attn_implementation=None):
     trainer = LLaVATrainer(model=model,
                            tokenizer=tokenizer,
                            args=training_args,
+                           callbacks=[LossLoggingCallback()],
                            **data_module)
 
     if list(pathlib.Path(training_args.output_dir).glob("checkpoint-*")):

@@ -7,13 +7,12 @@ import json
 from typing import Any
 
 import torch.nn as nn
-from timm.models import create_model
 
 # Import GlobalPool2D for use in MCi class
 from .mci import GlobalPool2D
 
-# Import fastvithd to register it with timm
-# This is needed for create_model("fastvithd") to work
+# Import fastvithd directly - we'll use it instead of timm's create_model
+# to avoid registration issues across different timm versions
 from .mci import fastvithd
 
 
@@ -36,6 +35,12 @@ def load_model_config(
     return model_cfg
 
 
+# Map model names to their factory functions
+_MODEL_REGISTRY = {
+    "fastvithd": fastvithd,
+}
+
+
 class MCi(nn.Module):
     """
     This class implements `MCi Models <https://arxiv.org/pdf/2311.17049.pdf>`_
@@ -47,8 +52,14 @@ class MCi(nn.Module):
         if "projection_dim" in kwargs:
             self.projection_dim = kwargs.get("projection_dim")
 
-        # Create model
-        self.model = create_model(model_name, projection_dim=self.projection_dim)
+        # Create model - use our own registry for fastvithd to avoid timm issues
+        if model_name in _MODEL_REGISTRY:
+            # Directly call the factory function
+            self.model = _MODEL_REGISTRY[model_name](**kwargs)
+        else:
+            # Fall back to timm's create_model for other models
+            from timm.models import create_model
+            self.model = create_model(model_name, projection_dim=self.projection_dim)
 
         # Build out projection head.
         if self.projection_dim is not None:

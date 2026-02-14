@@ -53,13 +53,20 @@ class MCi(nn.Module):
             self.projection_dim = kwargs.get("projection_dim")
 
         # Create model - use our own registry for fastvithd to avoid timm issues
+        print(f"[MCi] Creating model: {model_name}")
         if model_name in _MODEL_REGISTRY:
             # Directly call the factory function
+            print(f"[MCi] Using direct factory function for {model_name}")
             self.model = _MODEL_REGISTRY[model_name](**kwargs)
         else:
             # Fall back to timm's create_model for other models
+            print(f"[MCi] Using timm create_model for {model_name}")
             from timm.models import create_model
             self.model = create_model(model_name, projection_dim=self.projection_dim)
+
+        # Debug: verify model was created with parameters
+        num_params = sum(p.numel() for p in self.model.parameters())
+        print(f"[MCi] Model created with {num_params:,} parameters")
 
         # Build out projection head.
         if self.projection_dim is not None:

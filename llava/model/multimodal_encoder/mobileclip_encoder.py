@@ -93,11 +93,28 @@ class MobileCLIPVisionTower(nn.Module):
 
     @property
     def dtype(self):
-        return next(self.vision_tower.parameters()).dtype
+        params = list(self.vision_tower.parameters())
+        if not params:
+            print(f"[MobileCLIPVisionTower] WARNING: vision_tower has no parameters!")
+            print(f"[MobileCLIPVisionTower] vision_tower type: {type(self.vision_tower)}")
+            if hasattr(self.vision_tower, 'model'):
+                print(f"[MobileCLIPVisionTower] vision_tower.model type: {type(self.vision_tower.model)}")
+                model_params = list(self.vision_tower.model.parameters())
+                print(f"[MobileCLIPVisionTower] vision_tower.model has {len(model_params)} parameters")
+            # Fallback to float32
+            import torch
+            return torch.float32
+        return params[0].dtype
 
     @property
     def device(self):
-        return next(self.vision_tower.parameters()).device
+        params = list(self.vision_tower.parameters())
+        if not params:
+            print(f"[MobileCLIPVisionTower] WARNING: vision_tower has no parameters for device!")
+            # Fallback to cuda if available
+            import torch
+            return torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+        return params[0].device
 
     @property
     def config(self):

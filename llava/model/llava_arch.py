@@ -270,7 +270,9 @@ class LlavaMetaForCausalLM(ABC):
                     cur_new_input_embeds.append(cur_image_features)
                     cur_new_labels.append(torch.full((cur_image_features.shape[0],), IGNORE_INDEX, device=cur_labels.device, dtype=cur_labels.dtype))
 
-            cur_new_input_embeds = [x.to(self.device) for x in cur_new_input_embeds]
+            # Ensure all embeddings have same dtype as the model's embeddings
+            target_dtype = self.get_model().embed_tokens.weight.dtype
+            cur_new_input_embeds = [x.to(device=self.device, dtype=target_dtype) for x in cur_new_input_embeds]
 
             cur_new_input_embeds = torch.cat(cur_new_input_embeds)
             cur_new_labels = torch.cat(cur_new_labels)
@@ -293,11 +295,16 @@ class LlavaMetaForCausalLM(ABC):
         attention_mask = torch.zeros((batch_size, max_len), dtype=attention_mask.dtype, device=attention_mask.device)
         position_ids = torch.zeros((batch_size, max_len), dtype=position_ids.dtype, device=position_ids.device)
 
+        # Get target dtype from model embeddings
+        target_dtype = self.get_model().embed_tokens.weight.dtype
+
         for i, (cur_new_embed, cur_new_labels) in enumerate(zip(new_input_embeds, new_labels)):
             cur_len = cur_new_embed.shape[0]
+            # Ensure embedding is in correct dtype
+            cur_new_embed = cur_new_embed.to(dtype=target_dtype)
             if getattr(self.config, 'tokenizer_padding_side', 'right') == "left":
                 new_input_embeds_padded.append(torch.cat((
-                    torch.zeros((max_len - cur_len, cur_new_embed.shape[1]), dtype=cur_new_embed.dtype, device=cur_new_embed.device),
+                    torch.zeros((max_len - cur_len, cur_new_embed.shape[1]), dtype=target_dtype, device=cur_new_embed.device),
                     cur_new_embed
                 ), dim=0))
                 if cur_len > 0:
@@ -307,7 +314,7 @@ class LlavaMetaForCausalLM(ABC):
             else:
                 new_input_embeds_padded.append(torch.cat((
                     cur_new_embed,
-                    torch.zeros((max_len - cur_len, cur_new_embed.shape[1]), dtype=cur_new_embed.dtype, device=cur_new_embed.device)
+                    torch.zeros((max_len - cur_len, cur_new_embed.shape[1]), dtype=target_dtype, device=cur_new_embed.device)
                 ), dim=0))
                 if cur_len > 0:
                     new_labels_padded[i, :cur_len] = cur_new_labels

@@ -1,4 +1,5 @@
 import os
+import inspect
 import torch
 import torch.nn as nn
 
@@ -266,7 +267,12 @@ class LLaVATrainer(Trainer):
         else:
             # Workaround for the issue: https://github.com/haotian-liu/LLaVA/issues/1144
             model.generation_config = transformers.GenerationConfig(do_sample=True, temperature=None, top_p=None)
-            super(LLaVATrainer, self)._save_checkpoint(model, trial, metrics)
+            # Handle different transformers versions - newer versions don't accept metrics parameter
+            sig = inspect.signature(Trainer._save_checkpoint)
+            if 'metrics' in sig.parameters:
+                super(LLaVATrainer, self)._save_checkpoint(model, trial, metrics)
+            else:
+                super(LLaVATrainer, self)._save_checkpoint(model, trial)
 
     def _save(self, output_dir: Optional[str] = None, state_dict=None):
         if getattr(self.args, 'tune_mm_mlp_adapter', False):

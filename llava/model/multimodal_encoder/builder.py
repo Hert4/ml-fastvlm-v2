@@ -1,6 +1,7 @@
 import os
 from .clip_encoder import CLIPVisionTower, CLIPVisionTowerS2
 from .mobileclip_encoder import MobileCLIPVisionTower
+from .mobileclip2_encoder import MobileCLIP2VisionTower
 
 
 def build_vision_tower(vision_tower_cfg, **kwargs):
@@ -13,6 +14,8 @@ def build_vision_tower(vision_tower_cfg, **kwargs):
             return CLIPVisionTowerS2(vision_tower, args=vision_tower_cfg, **kwargs)
         else:
             return CLIPVisionTower(vision_tower, args=vision_tower_cfg, **kwargs)
+    elif "mobileclip2" in vision_tower.lower():
+        return MobileCLIP2VisionTower(vision_tower, args=vision_tower_cfg, **kwargs)
     elif "mobileclip" in vision_tower.lower():
         return MobileCLIPVisionTower(vision_tower, args=vision_tower_cfg, **kwargs)
 
